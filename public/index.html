@@ -4,67 +4,227 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>미팅노트</title>
+<link rel="icon" href="data:,">
 <style>
-  :root { --bg:#f7f7f5; --card:#fff; --text:#1f1f1f; --muted:#6b6b6b; --line:#e3e3e0; --accent:#2f6fed; --rec:#d93025; }
+  :root { --bg:#f7f7f5; --card:#fff; --text:#1f1f1f; --muted:#6b6b6b; --line:#e3e3e0; --accent:#2f6fed; --accent-soft:#eaf0fe; --rec:#d93025; --danger:#c5221f; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#161616; --card:#1f1f1f; --text:#ececec; --muted:#9a9a9a; --line:#333; --accent:#6d9bff; --rec:#ff6b5e; }
+    :root { --bg:#161616; --card:#1f1f1f; --text:#ececec; --muted:#9a9a9a; --line:#333; --accent:#6d9bff; --accent-soft:#22304d; --rec:#ff6b5e; --danger:#ff6b5e; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; }
-  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 22px; margin: 0 0 20px; }
+  .layout { display:grid; grid-template-columns: 260px 1fr; min-height:100vh; }
+  aside { border-right:1px solid var(--line); padding:20px 12px; background:var(--card); }
+  aside h1 { font-size:20px; margin:0 8px 16px; }
+  #newBtn { width:100%; margin-bottom:16px; }
+  .list-title { font-size:12px; color:var(--muted); margin:0 8px 6px; }
+  #noteList { list-style:none; margin:0; padding:0; }
+  #noteList li { padding:9px 10px; border-radius:8px; cursor:pointer; }
+  #noteList li:hover { background:var(--bg); }
+  #noteList li.active { background:var(--accent-soft); }
+  #noteList .t { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #noteList .d { font-size:12px; color:var(--muted); margin-top:2px; }
+  #noteList .empty { color:var(--muted); font-size:13px; cursor:default; }
+  main { max-width: 860px; width:100%; padding: 28px 24px 64px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
   .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-  button, label.btn { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--text); padding:9px 16px; border-radius:8px; cursor:pointer; }
+  .spacer { flex:1; }
+  button, label.btn { font:inherit; font-size:14px; border:1px solid var(--line); background:var(--card); color:var(--text); padding:8px 14px; border-radius:8px; cursor:pointer; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   button.rec { background:var(--rec); border-color:var(--rec); color:#fff; }
+  button.danger { color:var(--danger); border-color:var(--danger); }
   button:disabled { opacity:.5; cursor:not-allowed; }
   #status { color:var(--muted); font-size:14px; margin-top:12px; min-height:1.2em; }
+  #status.error { color:var(--danger); }
   #timer { font-variant-numeric: tabular-nums; color:var(--muted); }
-  h2 { font-size:16px; margin:0 0 10px; display:flex; justify-content:space-between; align-items:center; }
-  h2 button { font-size:13px; padding:5px 10px; }
-  textarea { width:100%; min-height:220px; resize:vertical; font:inherit; font-size:14px; line-height:1.6; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  h2 { font-size:17px; margin:0; }
+  h3 { font-size:14px; margin:18px 0 8px; color:var(--muted); }
+  .meta { font-size:13px; color:var(--muted); margin-top:4px; }
+  #rTitle { font-size:18px; font-weight:600; width:100%; border:1px solid transparent; background:transparent; color:var(--text); padding:4px 6px; margin-left:-6px; border-radius:6px; font-family:inherit; }
+  #rTitle:not([readonly]):hover, #rTitle:focus { border-color:var(--line); outline:none; }
+  #rSummary { line-height:1.7; margin:0; white-space:pre-wrap; }
+  ul.items { margin:0; padding-left:20px; line-height:1.8; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:13px; }
+  .none { color:var(--muted); }
+  details summary { cursor:pointer; color:var(--muted); font-size:14px; }
+  textarea { width:100%; min-height:200px; resize:vertical; font:inherit; font-size:14px; line-height:1.6; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:10px; }
   audio { width:100%; margin-top:12px; }
   input[type=file] { display:none; }
+  [hidden] { display:none !important; }
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { border-right:0; border-bottom:1px solid var(--line); }
+    main { padding:16px; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>미팅노트</h1>
+<div class="layout">
+  <aside>
+    <h1>미팅노트</h1>
+    <button id="newBtn" class="primary">+ 새 회의록</button>
+    <div class="list-title">저장된 회의록</div>
+    <ul id="noteList"></ul>
+  </aside>
 
-  <section class="card">
-    <div class="row">
-      <button id="recBtn" class="rec">● 녹음 시작</button>
-      <span id="timer"></span>
-      <label class="btn">오디오 파일 선택<input id="fileInput" type="file" accept="audio/*,video/*"></label>
-      <button id="transcribeBtn" class="primary" disabled>받아쓰기</button>
-    </div>
-    <audio id="player" controls hidden></audio>
-    <div id="status"></div>
-  </section>
+  <main>
+    <!-- 새 회의록: 녹음/업로드 → 받아쓰기 → 정리 -->
+    <section id="inputCard" class="card">
+      <div class="row">
+        <button id="recBtn" class="rec">● 녹음 시작</button>
+        <span id="timer"></span>
+        <label class="btn">녹취 파일 올리기<input id="fileInput" type="file" accept="audio/*,video/*"></label>
+        <button id="processBtn" class="primary" disabled>받아쓰고 정리하기</button>
+      </div>
+      <audio id="player" controls hidden></audio>
+      <div id="status"></div>
+    </section>
 
-  <section class="card">
-    <h2>받아쓰기 <span class="row"><button id="summarizeBtn" class="primary" disabled>회의록 정리</button><button data-copy="transcript">복사</button></span></h2>
-    <textarea id="transcript" placeholder="받아쓰기 결과가 여기에 표시됩니다. 직접 수정할 수도 있습니다."></textarea>
-  </section>
+    <!-- 결과 (새 회의록 / 저장된 회의록 공용) -->
+    <section id="resultCard" class="card" hidden>
+      <div class="row">
+        <div class="spacer">
+          <input id="rTitle" aria-label="회의록 제목">
+          <div id="rMeta" class="meta"></div>
+        </div>
+        <button id="saveBtn" class="primary">저장</button>
+        <button id="mdBtn">.md 내보내기</button>
+        <button id="deleteBtn" class="danger">삭제</button>
+      </div>
 
-  <section class="card">
-    <h2>회의록 <span class="row"><button data-copy="summary">복사</button><button id="downloadBtn">.md 저장</button></span></h2>
-    <textarea id="summary" placeholder="정리된 회의록이 여기에 표시됩니다."></textarea>
-  </section>
-</main>
+      <h3>요약</h3>
+      <p id="rSummary"></p>
+
+      <h3>결정 사항</h3>
+      <ul id="rDecisions" class="items"></ul>
+
+      <h3>할 일</h3>
+      <table>
+        <thead><tr><th style="width:22%">담당자</th><th>할 일</th><th style="width:22%">기한</th></tr></thead>
+        <tbody id="rActions"></tbody>
+      </table>
+
+      <h3>받아쓰기 원문</h3>
+      <details>
+        <summary>펼쳐 보기</summary>
+        <textarea id="rTranscript" readonly></textarea>
+      </details>
+    </section>
+  </main>
+</div>
 
 <script>
 const $ = (id) => document.getElementById(id);
 let audioBlob = null, recorder = null, chunks = [], timerId = null;
+let current = null;        // 화면에 보이는 회의록 {title, summary, decisions, actions, transcript, ...}
+let currentId = null;      // 저장된 회의록이면 id, 새 회의록이면 null
 
-const setStatus = (msg) => $('status').textContent = msg;
-const setAudio = (blob) => {
+// ───── 공통 ─────
+function setStatus(msg, isError = false) {
+  $('status').textContent = msg;
+  $('status').className = isError ? 'error' : '';
+}
+
+async function api(url, options) {
+  const res = await fetch(url, options);
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+const fmtDate = (iso) => new Date(iso).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+
+// ───── 결과 렌더링 ─────
+function renderNote(note, { saved }) {
+  current = note;
+  currentId = saved ? note.id : null;
+  $('resultCard').hidden = false;
+  $('rTitle').value = note.title || '';
+  $('rTitle').readOnly = saved;
+  $('rMeta').textContent = saved
+    ? `${fmtDate(note.createdAt)} 저장${note.fileName ? ' · ' + note.fileName : ''}`
+    : '아직 저장되지 않았습니다. 제목을 고친 뒤 저장할 수 있습니다.';
+  $('rSummary').textContent = note.summary || '';
+
+  const dl = $('rDecisions');
+  dl.replaceChildren();
+  if (!note.decisions?.length) dl.append(Object.assign(document.createElement('li'), { textContent: '없음', className: 'none' }));
+  for (const d of note.decisions ?? []) dl.append(Object.assign(document.createElement('li'), { textContent: d }));
+
+  const tb = $('rActions');
+  tb.replaceChildren();
+  if (!note.actions?.length) {
+    const tr = tb.insertRow();
+    Object.assign(tr.insertCell(), { textContent: '없음', colSpan: 3, className: 'none' });
+  }
+  for (const a of note.actions ?? []) {
+    const tr = tb.insertRow();
+    for (const v of [a.owner || '—', a.task, a.due || '—']) tr.insertCell().textContent = v;
+  }
+
+  $('rTranscript').value = note.transcript || '';
+  $('saveBtn').hidden = saved;
+  $('deleteBtn').hidden = !saved;
+  $('inputCard').hidden = saved;
+  highlightList();
+}
+
+// ───── 저장된 회의록 목록 ─────
+async function loadList() {
+  const notes = await api('/api/notes');
+  const ul = $('noteList');
+  ul.replaceChildren();
+  if (!notes.length) {
+    ul.append(Object.assign(document.createElement('li'), { textContent: '아직 저장된 회의록이 없습니다.', className: 'empty' }));
+    return;
+  }
+  for (const n of notes) {
+    const li = document.createElement('li');
+    li.dataset.id = n.id;
+    li.append(
+      Object.assign(document.createElement('div'), { className: 't', textContent: n.title }),
+      Object.assign(document.createElement('div'), { className: 'd', textContent: fmtDate(n.createdAt) }),
+    );
+    li.onclick = () => openNote(n.id);
+    ul.append(li);
+  }
+  highlightList();
+}
+
+function highlightList() {
+  document.querySelectorAll('#noteList li[data-id]').forEach((li) => li.classList.toggle('active', li.dataset.id === currentId));
+}
+
+async function openNote(id) {
+  try {
+    renderNote(await api(`/api/notes/${id}`), { saved: true });
+  } catch (e) {
+    alert('회의록을 불러오지 못했습니다: ' + e.message);
+    loadList();
+  }
+}
+
+function newNote() {
+  current = null; currentId = null; audioBlob = null;
+  $('resultCard').hidden = true;
+  $('inputCard').hidden = false;
+  $('player').hidden = true;
+  $('processBtn').disabled = true;
+  $('fileInput').value = '';
+  $('timer').textContent = '';
+  setStatus('녹음하거나 녹취 파일을 올려주세요.');
+  highlightList();
+}
+
+// ───── 녹음 / 파일 ─────
+function setAudio(blob) {
   audioBlob = blob;
   $('player').src = URL.createObjectURL(blob);
   $('player').hidden = false;
-  $('transcribeBtn').disabled = false;
-};
+  $('processBtn').disabled = false;
+}
 
 $('recBtn').onclick = async () => {
   if (recorder?.state === 'recording') { recorder.stop(); return; }
@@ -78,7 +238,7 @@ $('recBtn').onclick = async () => {
       clearInterval(timerId);
       $('recBtn').textContent = '● 녹음 시작';
       setAudio(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
-      setStatus('녹음 완료. [받아쓰기]를 눌러주세요.');
+      setStatus('녹음 완료. [받아쓰고 정리하기]를 눌러주세요.');
     };
     recorder.start(1000);
     const start = Date.now();
@@ -89,7 +249,7 @@ $('recBtn').onclick = async () => {
     $('recBtn').textContent = '■ 녹음 중지';
     setStatus('녹음 중...');
   } catch (e) {
-    setStatus('마이크를 사용할 수 없습니다: ' + e.message);
+    setStatus('마이크를 사용할 수 없습니다: ' + e.message, true);
   }
 };
 
@@ -100,63 +260,84 @@ $('fileInput').onchange = (e) => {
   setStatus(`파일 선택됨: ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`);
 };
 
-async function call(url, options) {
-  const res = await fetch(url, options);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
-
-$('transcribeBtn').onclick = async () => {
+// ───── 받아쓰기 → 정리 ─────
+$('processBtn').onclick = async () => {
   if (!audioBlob) return;
-  const fd = new FormData();
-  fd.append('audio', audioBlob, audioBlob.name || 'recording.webm');
-  $('transcribeBtn').disabled = true;
-  setStatus('Gemini 로 받아쓰는 중... (길이에 따라 시간이 걸립니다)');
+  $('processBtn').disabled = true;
+  $('recBtn').disabled = true;
+  const fileName = audioBlob.name || '녹음.webm';
   try {
-    const { transcript } = await call('/api/transcribe', { method: 'POST', body: fd });
-    $('transcript').value = transcript;
-    $('summarizeBtn').disabled = !transcript;
-    setStatus('받아쓰기 완료.');
-  } catch (e) {
-    setStatus('받아쓰기 실패: ' + e.message);
-  } finally {
-    $('transcribeBtn').disabled = false;
-  }
-};
+    setStatus('1/2 받아쓰는 중... (실패하면 잠시 기다렸다 자동으로 다시 시도합니다)');
+    const fd = new FormData();
+    fd.append('audio', audioBlob, fileName);
+    const { transcript } = await api('/api/transcribe', { method: 'POST', body: fd });
 
-$('transcript').oninput = () => $('summarizeBtn').disabled = !$('transcript').value.trim();
-
-$('summarizeBtn').onclick = async () => {
-  $('summarizeBtn').disabled = true;
-  setStatus('회의록 정리 중...');
-  try {
-    const { summary } = await call('/api/summarize', {
+    setStatus('2/2 요약 · 결정 사항 · 할 일로 정리하는 중...');
+    const note = await api('/api/summarize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: $('transcript').value }),
+      body: JSON.stringify({ transcript }),
     });
-    $('summary').value = summary;
-    setStatus('회의록 정리 완료.');
+    renderNote({ ...note, transcript, fileName }, { saved: false });
+    setStatus('정리 완료. 내용을 확인하고 [저장]을 눌러주세요.');
   } catch (e) {
-    setStatus('정리 실패: ' + e.message);
+    setStatus('실패: ' + e.message, true);
   } finally {
-    $('summarizeBtn').disabled = false;
+    $('processBtn').disabled = false;
+    $('recBtn').disabled = false;
   }
 };
 
-document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
-  await navigator.clipboard.writeText($(b.dataset.copy).value);
-  setStatus('복사했습니다.');
-});
+// ───── 저장 / 삭제 / 내보내기 ─────
+$('saveBtn').onclick = async () => {
+  $('saveBtn').disabled = true;
+  try {
+    const saved = await api('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...current, title: $('rTitle').value }),
+    });
+    currentId = saved.id;
+    await loadList();
+    renderNote(saved, { saved: true });
+  } catch (e) {
+    alert('저장 실패: ' + e.message);
+  } finally {
+    $('saveBtn').disabled = false;
+  }
+};
 
-$('downloadBtn').onclick = () => {
-  const text = `# 회의록 (${new Date().toLocaleString('ko-KR')})\n\n${$('summary').value}\n\n---\n\n## 받아쓰기 원문\n\n${$('transcript').value}\n`;
+$('deleteBtn').onclick = async () => {
+  if (!currentId || !confirm(`"${current.title}" 회의록을 삭제할까요?\n삭제하면 되돌릴 수 없습니다.`)) return;
+  try {
+    await api(`/api/notes/${currentId}`, { method: 'DELETE' });
+    newNote();
+    await loadList();
+    setStatus('회의록을 삭제했습니다.');
+  } catch (e) {
+    alert('삭제 실패: ' + e.message);
+  }
+};
+
+$('mdBtn').onclick = () => {
+  const n = { ...current, title: $('rTitle').value || current.title };
+  const lines = [
+    `# ${n.title}`, '',
+    '## 요약', n.summary, '',
+    '## 결정 사항', ...(n.decisions.length ? n.decisions.map((d) => `- ${d}`) : ['- 없음']), '',
+    '## 할 일', ...(n.actions.length ? n.actions.map((a) => `- [ ] ${a.owner || '담당자 미정'} — ${a.task}${a.due ? ' — ' + a.due : ''}`) : ['- 없음']), '',
+    '---', '', '## 받아쓰기 원문', '', n.transcript, '',
+  ];
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
-  a.download = `회의록_${new Date().toISOString().slice(0, 10)}.md`;
+  a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/markdown' }));
+  a.download = `${n.title.replace(/[\\/:*?"<>|]/g, '_')}.md`;
   a.click();
 };
+
+$('newBtn').onclick = newNote;
+
+newNote();
+loadList().catch((e) => setStatus('목록을 불러오지 못했습니다: ' + e.message, true));
 </script>
 </body>
 </html>
