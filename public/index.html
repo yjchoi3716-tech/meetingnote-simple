@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미팅노트</title>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --text:#1f1f1f; --muted:#6b6b6b; --line:#e3e3e0; --accent:#2f6fed; --rec:#d93025; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161616; --card:#1f1f1f; --text:#ececec; --muted:#9a9a9a; --line:#333; --accent:#6d9bff; --rec:#ff6b5e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  button, label.btn { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--text); padding:9px 16px; border-radius:8px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.rec { background:var(--rec); border-color:var(--rec); color:#fff; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  #status { color:var(--muted); font-size:14px; margin-top:12px; min-height:1.2em; }
+  #timer { font-variant-numeric: tabular-nums; color:var(--muted); }
+  h2 { font-size:16px; margin:0 0 10px; display:flex; justify-content:space-between; align-items:center; }
+  h2 button { font-size:13px; padding:5px 10px; }
+  textarea { width:100%; min-height:220px; resize:vertical; font:inherit; font-size:14px; line-height:1.6; background:transparent; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  audio { width:100%; margin-top:12px; }
+  input[type=file] { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>미팅노트</h1>
+
+  <section class="card">
+    <div class="row">
+      <button id="recBtn" class="rec">● 녹음 시작</button>
+      <span id="timer"></span>
+      <label class="btn">오디오 파일 선택<input id="fileInput" type="file" accept="audio/*,video/*"></label>
+      <button id="transcribeBtn" class="primary" disabled>받아쓰기</button>
+    </div>
+    <audio id="player" controls hidden></audio>
+    <div id="status"></div>
+  </section>
+
+  <section class="card">
+    <h2>받아쓰기 <span class="row"><button id="summarizeBtn" class="primary" disabled>회의록 정리</button><button data-copy="transcript">복사</button></span></h2>
+    <textarea id="transcript" placeholder="받아쓰기 결과가 여기에 표시됩니다. 직접 수정할 수도 있습니다."></textarea>
+  </section>
+
+  <section class="card">
+    <h2>회의록 <span class="row"><button data-copy="summary">복사</button><button id="downloadBtn">.md 저장</button></span></h2>
+    <textarea id="summary" placeholder="정리된 회의록이 여기에 표시됩니다."></textarea>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let audioBlob = null, recorder = null, chunks = [], timerId = null;
+
+const setStatus = (msg) => $('status').textContent = msg;
+const setAudio = (blob) => {
+  audioBlob = blob;
+  $('player').src = URL.createObjectURL(blob);
+  $('player').hidden = false;
+  $('transcribeBtn').disabled = false;
+};
+
+$('recBtn').onclick = async () => {
+  if (recorder?.state === 'recording') { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    recorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      clearInterval(timerId);
+      $('recBtn').textContent = '● 녹음 시작';
+      setAudio(new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }));
+      setStatus('녹음 완료. [받아쓰기]를 눌러주세요.');
+    };
+    recorder.start(1000);
+    const start = Date.now();
+    timerId = setInterval(() => {
+      const s = Math.floor((Date.now() - start) / 1000);
+      $('timer').textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    }, 500);
+    $('recBtn').textContent = '■ 녹음 중지';
+    setStatus('녹음 중...');
+  } catch (e) {
+    setStatus('마이크를 사용할 수 없습니다: ' + e.message);
+  }
+};
+
+$('fileInput').onchange = (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  setAudio(f);
+  setStatus(`파일 선택됨: ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`);
+};
+
+async function call(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+$('transcribeBtn').onclick = async () => {
+  if (!audioBlob) return;
+  const fd = new FormData();
+  fd.append('audio', audioBlob, audioBlob.name || 'recording.webm');
+  $('transcribeBtn').disabled = true;
+  setStatus('Gemini 로 받아쓰는 중... (길이에 따라 시간이 걸립니다)');
+  try {
+    const { transcript } = await call('/api/transcribe', { method: 'POST', body: fd });
+    $('transcript').value = transcript;
+    $('summarizeBtn').disabled = !transcript;
+    setStatus('받아쓰기 완료.');
+  } catch (e) {
+    setStatus('받아쓰기 실패: ' + e.message);
+  } finally {
+    $('transcribeBtn').disabled = false;
+  }
+};
+
+$('transcript').oninput = () => $('summarizeBtn').disabled = !$('transcript').value.trim();
+
+$('summarizeBtn').onclick = async () => {
+  $('summarizeBtn').disabled = true;
+  setStatus('회의록 정리 중...');
+  try {
+    const { summary } = await call('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: $('transcript').value }),
+    });
+    $('summary').value = summary;
+    setStatus('회의록 정리 완료.');
+  } catch (e) {
+    setStatus('정리 실패: ' + e.message);
+  } finally {
+    $('summarizeBtn').disabled = false;
+  }
+};
+
+document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = async () => {
+  await navigator.clipboard.writeText($(b.dataset.copy).value);
+  setStatus('복사했습니다.');
+});
+
+$('downloadBtn').onclick = () => {
+  const text = `# 회의록 (${new Date().toLocaleString('ko-KR')})\n\n${$('summary').value}\n\n---\n\n## 받아쓰기 원문\n\n${$('transcript').value}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+  a.download = `회의록_${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+};
+</script>
+</body>
+</html>
